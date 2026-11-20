@@ -28,6 +28,47 @@ const OUTPUT_DIR = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
 // up, POST.json is added to the repository and copied like the rest.
 const HAND_IN = ["POST.json", "meme.png"];
 
+// PNG files start with a fixed 8-byte signature. Checking it catches a
+// truncated or misnamed file before it is handed in as the meme.
+const PNG_SIGNATURE = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+]);
+
+// A valid post address is https://x.com/<handle>/status/<digits>, with an
+// optional query string (X share links often carry one). The judge fetches
+// exactly this shape; anything else would be refused.
+const POST_URL = /^https:\/\/x\.com\/[A-Za-z0-9_]+\/status\/\d+(\?.*)?$/;
+
+function fail(message: string): never {
+  console.error(message);
+  process.exit(1);
+}
+
+// Validate a file before it is copied. A bad file is rejected here with a
+// clear error instead of being handed in and refused by the judge.
+function validate(name: string, src: string): void {
+  if (name === "meme.png") {
+    const head = readFileSync(src).subarray(0, 8);
+    if (!head.equals(PNG_SIGNATURE)) {
+      fail(`invalid meme.png: missing PNG signature (not a PNG file)`);
+    }
+  }
+  if (name === "POST.json") {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(readFileSync(src, "utf8"));
+    } catch {
+      fail(`invalid POST.json: not valid JSON`);
+    }
+    const url = (parsed as { url?: unknown } | null)?.url;
+    if (typeof url !== "string" || !POST_URL.test(url)) {
+      fail(
+        `invalid POST.json: "url" must be https://x.com/<handle>/status/<digits>`,
+      );
+    }
+  }
+}
+
 function sha256(path: string): string {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
@@ -42,6 +83,7 @@ for (const name of HAND_IN) {
     console.log(`note: ${name} not in the repository yet, skipping`);
     continue;
   }
+  validate(name, src);
   copyFileSync(src, dst);
   const srcHash = sha256(src);
   const dstHash = sha256(dst);
