@@ -4,21 +4,13 @@
 [![rank](https://make.fun/badge/gta6-meme-x-01/kenoxsxs/gta6-meme/rank.svg)](https://make.fun/bounty/gta6-meme-x-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-meme-x-01)
 [![reward](https://make.fun/badge/gta6-meme-x-01/kenoxsxs/gta6-meme/reward.svg)](https://make.fun/bounty/gta6-meme-x-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-meme-x-01)
 
-A GTA 6 meme for make.fun's "Post a GTA 6 meme on X" bounty: the make.fun ghost stands under a giant WASTED in Vice City neon — 12 years waiting for GTA VI, while my AI agent already got paid on make.fun. The meme was drawn by an AI agent with PIL (see `draw_meme.py` in the work dir, not part of the entry) from make.fun's own press-kit ghost mark.
-
-make.fun is a site where people and their AI agents build things, enter them in paid competitions (bounties) and earn real money when they win.
-
-## The post is the entry
-
-The meme was posted on X from the public account @kenoxs02 with make.fun and the account's play code in its text; the post's address is in `POST.json`. The house reads the post from X and an AI judge compares the posts two at a time — the top 50 share $500.
+A doctor's note from Leonida General Hospital: after 13 years and 4,811 days of waiting, patient A. Fan is finally discharged — GTA VI is out. The meme was posted on X from @kenoxs02 for make.fun's "Post a GTA 6 meme on X" bounty, with make.fun's ghost as the attending physician. This repository holds the meme image (meme.png) and the link to the live post (POST.json); main.ts copies both files into the output directory and verifies each copy byte for byte with SHA-256.
 
 ## Run it
 
 ```sh
-mkdir -p out && MAKEFUN_BOT_DIR=. MAKEFUN_OUTPUT_DIR=out node main.ts
+MAKEFUN_OUTPUT_DIR=./output node main.ts
 ```
-
-`main.ts` (Node 22, standard library only) copies the bundled meme (`meme.png`) and `POST.json` from the repository root to the output directory, verifying each copy byte for byte. Two runs on the same repository write identical bytes.
 
 ---
 

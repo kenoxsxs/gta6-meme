@@ -1,102 +1,87 @@
-// gta6-meme-x-01 entry (Node 22, standard library only).
+// Round-2 entry for make.fun's "Post a GTA 6 meme on X" bounty.
 //
-// The entry is the X post itself: an agent-made GTA 6 meme, posted on X
-// from a public account with make.fun (a link or written out) and/or a tag
-// of @makefunai and the account's play code in its text. The house reads
-// the post from X and hands its first picture and its text to the judge.
+// The meme itself (meme.png) and the link to the live X post (POST.json)
+// are the entry. This program's only job is to hand them over: copy both
+// files into the grader's output directory and prove, byte for byte, that
+// the copies are identical to the files in this repository.
 //
-// This program's job is to hand in the entry's files deterministically:
-// it copies the bundled meme image (meme.png) and POST.json (the post's
-// address, added once the post exists) from the repository root to
-// /output, then verifies each copy byte for byte against its source.
-// Two runs on the same repository write identical bytes.
-//
-// Outside the grader's container, MAKEFUN_BOT_DIR and MAKEFUN_OUTPUT_DIR
-// stand in for /bot and /output:
-//   mkdir -p out && MAKEFUN_BOT_DIR=. MAKEFUN_OUTPUT_DIR=out node main.ts
+// Node 22, standard library only. No network, no dependencies.
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
-const BOT_DIR = process.env.MAKEFUN_BOT_DIR ?? "/bot";
-const OUTPUT_DIR = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
+// The directory this script lives in is the repository root: the files we
+// ship sit next to it. process.argv[1] is the script path as invoked.
+const scriptDir = dirname(resolve(process.argv[1]));
 
-// Files this entry hands in, in order. POST.json is listed first because
-// the gate reads /output/POST.json; it is optional here only because the
-// post does not exist yet when the meme is first built — once the post is
-// up, POST.json is added to the repository and copied like the rest.
-const HAND_IN = ["POST.json", "meme.png"];
+// The grader hands us a writable output directory through
+// MAKEFUN_OUTPUT_DIR. When it is not set (a local run), fall back to an
+// "output" folder next to the script.
+const outputDir =
+  process.env.MAKEFUN_OUTPUT_DIR && process.env.MAKEFUN_OUTPUT_DIR.trim() !== ""
+    ? process.env.MAKEFUN_OUTPUT_DIR
+    : join(scriptDir, "output");
 
-// PNG files start with a fixed 8-byte signature. Checking it catches a
-// truncated or misnamed file before it is handed in as the meme.
-const PNG_SIGNATURE = Buffer.from([
-  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-]);
+// The two files that make up the entry.
+const FILES = ["meme.png", "POST.json"];
 
-// A valid post address is https://x.com/<handle>/status/<digits>, with an
-// optional query string (X share links often carry one). The judge fetches
-// exactly this shape; anything else would be refused.
-const POST_URL = /^https:\/\/x\.com\/[A-Za-z0-9_]+\/status\/\d+(\?.*)?$/;
-
-function fail(message: string): never {
-  console.error(message);
-  process.exit(1);
+function sha256(filePath) {
+  return createHash("sha256").update(readFileSync(filePath)).digest("hex");
 }
 
-// Validate a file before it is copied. A bad file is rejected here with a
-// clear error instead of being handed in and refused by the judge.
-function validate(name: string, src: string): void {
-  if (name === "meme.png") {
-    const head = readFileSync(src).subarray(0, 8);
-    if (!head.equals(PNG_SIGNATURE)) {
-      fail(`invalid meme.png: missing PNG signature (not a PNG file)`);
-    }
-  }
-  if (name === "POST.json") {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(readFileSync(src, "utf8"));
-    } catch {
-      fail(`invalid POST.json: not valid JSON`);
-    }
-    const url = (parsed as { url?: unknown } | null)?.url;
-    if (typeof url !== "string" || !POST_URL.test(url)) {
-      fail(
-        `invalid POST.json: "url" must be https://x.com/<handle>/status/<digits>`,
-      );
-    }
-  }
-}
-
-function sha256(path: string): string {
-  return createHash("sha256").update(readFileSync(path)).digest("hex");
-}
-
-mkdirSync(OUTPUT_DIR, { recursive: true });
-
-let copied = 0;
-for (const name of HAND_IN) {
-  const src = join(BOT_DIR, name);
-  const dst = join(OUTPUT_DIR, name);
-  if (!existsSync(src)) {
-    console.log(`note: ${name} not in the repository yet, skipping`);
-    continue;
-  }
-  validate(name, src);
-  copyFileSync(src, dst);
-  const srcHash = sha256(src);
-  const dstHash = sha256(dst);
-  if (srcHash !== dstHash) {
-    console.error(`mismatch: ${dst} does not match ${src}`);
+// The entry link is what the house actually grades: POST.json must name a
+// real public X post. A malformed link is caught here, with the file named,
+// instead of failing silently at intake.
+function validatePostLink(postJsonPath) {
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(postJsonPath, "utf8"));
+  } catch (err) {
+    console.error(`ERROR: POST.json is not valid JSON: ${err.message}.`);
     process.exit(1);
   }
-  console.log(`copied ${name} (${srcHash.slice(0, 12)})`);
-  copied += 1;
+  const url = parsed && typeof parsed.url === "string" ? parsed.url : "";
+  if (!/^https:\/\/(x\.com|twitter\.com)\/[^/]+\/status\/\d+/.test(url)) {
+    console.error(
+      `ERROR: POST.json does not name an X post URL (got ${JSON.stringify(url)}).`,
+    );
+    process.exit(1);
+  }
+  console.log(`OK: POST.json names the X post ${url}.`);
 }
 
-if (copied === 0) {
-  console.error("nothing to hand in: neither POST.json nor meme.png found");
-  process.exit(1);
+function main() {
+  if (!existsSync(outputDir)) {
+    mkdirSync(outputDir, { recursive: true });
+  }
+
+  for (const name of FILES) {
+    const source = join(scriptDir, name);
+    const dest = join(outputDir, name);
+
+    if (!existsSync(source)) {
+      console.error(`ERROR: ${name} is missing from the repository (${source}).`);
+      process.exit(1);
+    }
+
+    copyFileSync(source, dest);
+
+    const sourceHash = sha256(source);
+    const destHash = sha256(dest);
+    if (sourceHash !== destHash) {
+      console.error(
+        `ERROR: ${name} failed to verify: copy sha256 ${destHash} does not match source sha256 ${sourceHash}.`,
+      );
+      process.exit(1);
+    }
+
+    console.log(`OK: ${name} copied to ${dest} (sha256 ${destHash}).`);
+  }
+
+  validatePostLink(join(outputDir, "POST.json"));
+
+  console.log("OK: meme.png and POST.json both verified.");
 }
-console.log(`handed in ${copied} file(s) to ${OUTPUT_DIR}`);
+
+main();
